@@ -152,41 +152,13 @@ class Color(object):
         super(Color, self).__setattr__('blue', blue * 255.0)
 
 
-class Display(list):
-
-    conn = None
-    successes = None
-    failures = None
-
-    def __init__(self, conn, *args, **kw):
-
-        super(Display, self).__init__(*args, **kw)
-        self.conn = conn
-        self.successes = 0
-        self.failures = 0
-
-    def render(self):
-
-        line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
-        #print line
-        self.conn.write(line)
-        resp = self.conn.readline()
-
-        if resp.startswith('OK'):
-            self.successes += 1
-        else:
-            self.failures += 1
-            print "Success count: %d" % (self.successes,)
-            print "Failure count: %d" % (self.failures,)
-
-            print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100
-
+class Layer(list):
 
     def lighten(self, other):
 
         if isinstance(other, int) or isinstance(other, float):
 
-            d = Display(None)
+            d = Layer()
 
             for spot in self:
                 d.append(Color(red=other, green=other, blue=other))
@@ -208,7 +180,7 @@ class Display(list):
 
         if isinstance(other, int) or isinstance(other, float):
 
-            d = Display(None)
+            d = Layer()
 
             for spot in self:
                 d.append(Color(red=other, green=other, blue=other))
@@ -224,6 +196,51 @@ class Display(list):
                 color = Color()
 
             self[idx].darken(color)
+
+
+class Display(Layer):
+
+    conn = None
+    layers = None
+    successes = None
+    failures = None
+
+    def __init__(self, conn, *args, **kw):
+
+        if kw.has_key('layers'):
+            self.layers = kw.pop('layers')
+        else:
+            self.layers = []
+
+        super(Display, self).__init__(*args, **kw)
+
+        self.conn = conn
+        self.successes = 0
+        self.failures = 0
+
+
+    def update(self):
+
+        self.darken(255)
+        for layer in self.layers:
+            self.lighten(layer)
+
+
+    def render(self):
+
+        line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
+        #print line
+        self.conn.write(line)
+        resp = self.conn.readline()
+
+        if resp.startswith('OK'):
+            self.successes += 1
+        else:
+            self.failures += 1
+            print "Success count: %d" % (self.successes,)
+            print "Failure count: %d" % (self.failures,)
+
+            print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100
 
 
 class Pattern(object):
@@ -347,25 +364,27 @@ class Irrlicht(Pattern):
 if __name__ == '__main__':
 
     conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
-    display = Display(conn, [Color(), Color(), Color(), Color()])
-    overlay_1 = Display(None, [Color(), Color(), Color(), Color()])
-    overlay_2 = Display(None, [Color(), Color(), Color(), Color()])
-    #pattern = HSVRotate(overlay_1)
-    pattern_1 = Irrlicht(overlay_1, Color(hue=340, saturation=1, value=0.01), spot_width=60, step=1.2)
-    pattern_2 = Irrlicht(overlay_2, Color(hue=200, saturation=1, value=1), step=-1.2, spot_width=135)
-    #pattern_1 = Irrlicht(overlay_1, Color(red=255, green=96, blue=0), step=-0.4, spot_width=90)
-    #pattern_2 = Irrlicht(overlay_2, Color(red=0, green=96, blue=255), step=1.2, spot_width=135)
+    layer_1 = Layer([Color(), Color(), Color(), Color()])
+    layer_2 = Layer([Color(), Color(), Color(), Color()])
+    layer_3 = Layer([Color(), Color(), Color(), Color()])
+    display = Display(conn, [Color(), Color(), Color(), Color()], layers=[layer_1, layer_2, layer_3])
+    #pattern = HSVRotate(layer_1)
+
+    pattern_1 = Irrlicht(layer_1, Color(hue=340, saturation=1, value=1.0), step=10.8, spot_width=180)
+    pattern_1.deg = 180
+
+    pattern_2 = Irrlicht(layer_2, Color(hue=200, saturation=1, value=1.0), step=10.8, spot_width=180)
+
+    pattern_3 = Irrlicht(layer_3, Color(hue=40, saturation=1, value=0.8), step=-1.8)
 
     sleep(2)
 
     while True:
 
-        display.darken(255) # reset main display
-
         pattern_1.update()
         pattern_2.update()
+        pattern_3.update()
 
-        display.lighten(overlay_1)
-        display.lighten(overlay_2)
+        display.update()
         display.render()
         sleep(0.01)
