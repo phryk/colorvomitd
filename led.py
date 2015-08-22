@@ -17,13 +17,41 @@ class Color(object):
     saturation = None
     value = None
 
-    def __init__(self, red=0.0, green=0.0, blue=0.0):
+    def __init__(self, red=None, green=None, blue=None, hue=None, saturation=None, value=None):
 
-        super(Color, self).__setattr__('red', red)
-        super(Color, self).__setattr__('green', green)
-        super(Color, self).__setattr__('blue', blue)
+        rgb_passed = bool(red)|bool(green)|bool(blue)
+        hsv_passed = bool(hue)|bool(saturation)|bool(value)
 
-        self._update_hsv()
+        if rgb_passed and hsv_passed:
+            raise ValueError("Color can't be initialized with RGB and HSV at the same time.")
+
+        elif hsv_passed:
+
+            if not hue:
+                hue = 0.0
+            if not saturation:
+                saturation = 0.0
+            if not value:
+                value = 0.0
+
+            super(Color, self).__setattr__('hue', hue)
+            super(Color, self).__setattr__('saturation', saturation)
+            super(Color, self).__setattr__('value', value)
+            self._update_rgb()
+
+        else:
+
+            if not red:
+                red = 0
+            if not green:
+                green = 0
+            if not blue:
+                blue = 0
+
+            super(Color, self).__setattr__('red', red)
+            super(Color, self).__setattr__('green', green)
+            super(Color, self).__setattr__('blue', blue)
+            self._update_hsv()
 
 
     def __setattr__(self, key, value):
@@ -43,7 +71,23 @@ class Color(object):
 
     def __repr__(self):
 
-        return '<%s: red %f, green %f, blue %f, hue %f, saturation %f, value %f>' % (self.__class__.__name__, self.red, self.green, self.blue, self.hue, self.saturation, self.value)
+        return '<%s: red %f, green %f, blue %f, hue %f, saturation %f, value %f>' % (
+                self.__class__.__name__,
+                self.red,
+                self.green,
+                self.blue,
+                self.hue,
+                self.saturation,
+                self.value
+            )
+
+
+    def __str__(self):
+        return "%d %d %d" % (
+            int(round(self.red)),
+            int(round(self.green)),
+            int(round(self.blue)),
+        )
 
 
     def lighten(self, other):
@@ -95,24 +139,17 @@ class Color(object):
     def _update_hsv(self):
 
         hue, saturation, value = colorsys.rgb_to_hsv(self.red/255.0, self.green/255.0, self.blue/255.0)
-        super(Color, self).__setattr__('hue', hue)
+        super(Color, self).__setattr__('hue', hue * 360.0)
         super(Color, self).__setattr__('saturation', saturation)
         super(Color, self).__setattr__('value', value)
 
 
     def _update_rgb(self):
 
-        red, green, blue = colorsys.hsv_to_rgb(self.hue / 360.0, self.value, self.saturation)
-
+        red, green, blue = colorsys.hsv_to_rgb(self.hue / 360.0, self.saturation, self.value)
         super(Color, self).__setattr__('red', red * 255.0)
         super(Color, self).__setattr__('green', green * 255.0)
         super(Color, self).__setattr__('blue', blue * 255.0)
-
-
-class LED(Color):
-
-    def __str__(self):
-        return "%d %d %d" % (self.red, self.green, self.blue)
 
 
 class Display(list):
@@ -151,13 +188,13 @@ class Display(list):
 
             d = Display(None)
 
-            for led in self:
-                d.append(LED(red=other, green=other, blue=other))
+            for spot in self:
+                d.append(Color(red=other, green=other, blue=other))
 
             other = d
 
         idx = -1
-        for led in self:
+        for spot in self:
             idx += 1
             try:
                 color = other[idx]
@@ -173,13 +210,13 @@ class Display(list):
 
             d = Display(None)
 
-            for led in self:
-                d.append(LED(red=other, green=other, blue=other))
+            for spot in self:
+                d.append(Color(red=other, green=other, blue=other))
 
             other = d
 
         idx = -1
-        for led in self:
+        for spot in self:
             idx += 1
             try:
                 color = display[idx]
@@ -215,7 +252,7 @@ class HSVRotate(Pattern):
 
     def update(self):
 
-        led = self.display[self.idx]
+        spot = self.display[self.idx]
         if(self.hue >= 359):
             self.hue = 0
             self.idx += 1
@@ -223,14 +260,14 @@ class HSVRotate(Pattern):
             if self.idx >= len(self.display):
                 self.idx = 0
         
-            led = self.display[self.idx]
+            spot = self.display[self.idx]
 
         else:
             self.hue += 1
 
-        led.hue = self.hue
-        led.saturation = 0.5
-        led.value = 0.5
+        spot.hue = self.hue
+        spot.saturation = 0.5
+        spot.value = 0.5
 
 
 
@@ -295,17 +332,14 @@ class Irrlicht(Pattern):
             elif distance >= self.spot_width:
                 multiplier = 0.0
             else:
-                #multiplier = 30 / (distance * self.spot_width)
-                #multiplier = abs(distance - self.spot_width) / self.spot_width
                 multiplier = abs(distance - self.spot_width) / self.spot_width
 
-            led = self.display[idx]
-            led.red = self.color.red * multiplier
-            led.green = self.color.green * multiplier
-            led.blue = self.color.blue * multiplier
+            spot = self.display[idx]
+            spot.red = self.color.red * multiplier
+            spot.green = self.color.green * multiplier
+            spot.blue = self.color.blue * multiplier
 
             idx += 1
-
 
 
 
@@ -313,12 +347,12 @@ class Irrlicht(Pattern):
 if __name__ == '__main__':
 
     conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
-    display = Display(conn, [LED(), LED(), LED(), LED()])
-    overlay_1 = Display(None, [LED(), LED(), LED(), LED()])
-    overlay_2 = Display(None, [LED(), LED(), LED(), LED()])
+    display = Display(conn, [Color(), Color(), Color(), Color()])
+    overlay_1 = Display(None, [Color(), Color(), Color(), Color()])
+    overlay_2 = Display(None, [Color(), Color(), Color(), Color()])
     #pattern = HSVRotate(overlay_1)
-    pattern_1 = Irrlicht(overlay_1, Color(red=255, green=0, blue=96), spot_width=60, step=3.6)
-    pattern_2 = Irrlicht(overlay_2, Color(red=0, green=96, blue=255), step=-1.2, spot_width=160)
+    pattern_1 = Irrlicht(overlay_1, Color(hue=340, saturation=1, value=0.01), spot_width=60, step=1.2)
+    pattern_2 = Irrlicht(overlay_2, Color(hue=200, saturation=1, value=1), step=-1.2, spot_width=135)
     #pattern_1 = Irrlicht(overlay_1, Color(red=255, green=96, blue=0), step=-0.4, spot_width=90)
     #pattern_2 = Irrlicht(overlay_2, Color(red=0, green=96, blue=255), step=1.2, spot_width=135)
 
