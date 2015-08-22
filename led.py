@@ -131,7 +131,7 @@ class Display(list):
     def render(self):
 
         line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
-        print line
+        #print line
         self.conn.write(line)
         resp = self.conn.readline()
 
@@ -239,20 +239,29 @@ class Irrlicht(Pattern):
     deg = None
     color = None
     spot_width = None
+    spot_distance = None # distance between spots
     spot_coords = None
 
 
-    def __init__(self, display, color):
+    def __init__(self, display, color, step=3.6, spot_width=None):
 
         super(Irrlicht, self).__init__(display)
 
         self.deg = 0
         self.color = color
-        self.spot_width = 360.0 / len(self.display)
+        self.step = step
+
+        self.spot_distance = 360.0 / len(self.display)
         self.spot_coords = []
 
         for i in range(0, len(self.display)):
-            self.spot_coords.append(i * self.spot_width)
+            self.spot_coords.append(i * self.spot_distance)
+
+        if spot_width:
+            self.spot_width = spot_width
+        else:
+            self.spot_width = self.spot_distance
+
 
 
 #    def __setattr__(self, key, value):
@@ -265,13 +274,13 @@ class Irrlicht(Pattern):
 
     def update(self):
 
-        self.deg += 3.6
+        self.deg += self.step
 
-        if self.deg > 360.0:
+        if self.step > 0 and self.deg > 360.0:
             self.deg = self.deg % 360.0
 
-        print "spot coords: ", self.spot_coords
-        print self.deg
+        elif self.step < 0 and self.deg < 0:
+            self.deg += 360
 
         idx = 0
         for coord in self.spot_coords:
@@ -281,17 +290,14 @@ class Irrlicht(Pattern):
             if distance > 180:
                 distance = 360.0 - distance
 
-            print "distance: ", distance
-
             if distance == 0:
                 multiplier = 1.0
             elif distance >= self.spot_width:
                 multiplier = 0.0
             else:
                 #multiplier = 30 / (distance * self.spot_width)
+                #multiplier = abs(distance - self.spot_width) / self.spot_width
                 multiplier = abs(distance - self.spot_width) / self.spot_width
-
-            print "multiplier", multiplier
 
             led = self.display[idx]
             led.red = self.color.red * multiplier
@@ -309,15 +315,23 @@ if __name__ == '__main__':
     conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
     display = Display(conn, [LED(), LED(), LED(), LED()])
     overlay_1 = Display(None, [LED(), LED(), LED(), LED()])
+    overlay_2 = Display(None, [LED(), LED(), LED(), LED()])
     #pattern = HSVRotate(overlay_1)
-    pattern = Irrlicht(overlay_1, Color(red=50, green=0, blue=23))
+    pattern_1 = Irrlicht(overlay_1, Color(red=255, green=0, blue=96), spot_width=60, step=3.6)
+    pattern_2 = Irrlicht(overlay_2, Color(red=0, green=96, blue=255), step=-1.2, spot_width=160)
+    #pattern_1 = Irrlicht(overlay_1, Color(red=255, green=96, blue=0), step=-0.4, spot_width=90)
+    #pattern_2 = Irrlicht(overlay_2, Color(red=0, green=96, blue=255), step=1.2, spot_width=135)
 
     sleep(2)
 
     while True:
 
         display.darken(255) # reset main display
-        pattern.update()
+
+        pattern_1.update()
+        pattern_2.update()
+
         display.lighten(overlay_1)
+        display.lighten(overlay_2)
         display.render()
         sleep(0.01)
