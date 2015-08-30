@@ -82,19 +82,6 @@ class Emulator(pyglet.window.Window):
     def update(self):
 
         vertex_coords = [
-            [
-                0,0,
-                int(round(self.width / 2)), 0,
-                int(round(self.width / 2)), int(round(self.height / 2)),
-                0, int(round(self.height / 2))
-            ],
-
-            [
-                int(round(self.width / 2)) + 1, 0,
-                self.width, 0,
-                self.width, int(round(self.height / 2)),
-                int(round(self.width / 2)) + 1, int(round(self.height / 2))
-            ],
 
             [
                 0, int(round(self.height / 2)) + 1,
@@ -108,7 +95,22 @@ class Emulator(pyglet.window.Window):
                 self.width, int(round(self.height / 2)) + 1,
                 self.width, self.height,
                 int(round(self.width / 2)) + 1, self.height
+            ],
+
+            [
+                int(round(self.width / 2)) + 1, 0,
+                self.width, 0,
+                self.width, int(round(self.height / 2)),
+                int(round(self.width / 2)) + 1, int(round(self.height / 2))
+            ],
+
+            [
+                0,0,
+                int(round(self.width / 2)), 0,
+                int(round(self.width / 2)), int(round(self.height / 2)),
+                0, int(round(self.height / 2))
             ]
+
         ]
 
 
@@ -520,7 +522,7 @@ if __name__ == '__main__':
     #pattern_3 = Irrlicht(layer_3, Color(hue=90, saturation=1, value=1.0), step=-0.2, spot_width=270)
 
     # water-ish
-    pattern_1 = Irrlicht(layer_1, Color(hue=200, saturation=1, value=0.2), step=2.17, spot_width=200)
+    pattern_1 = Irrlicht(layer_1, Color(hue=200, saturation=1, value=0.2), step=2.17, spot_width=120)
     pattern_2 = Irrlicht(layer_2, Color(hue=190, saturation=1, value=0.2), step=-4.23, spot_width=200)
     pattern_3 = Irrlicht(layer_3, Color(hue=240, saturation=1, value=0.05), step=-16.1)
     pattern_4 = Irrlicht(layer_4, Color(hue=170, saturation=1, value=0.05), step=18.3)
