@@ -2,9 +2,146 @@
 # -*- coding:utf-8 -*-
 
 import colorsys
+import pyglet
 
 from serial import Serial
 from time import sleep
+
+
+class Emulator(pyglet.window.Window):
+
+    flag_send = None
+    message = None
+    colors = None
+
+    def __init__(self, *args, **kw):
+
+        if not kw.has_key('config'):
+            kw['config'] = pyglet.gl.Config(double_buffer=True, alpha_size=8)
+
+
+        super(Emulator, self).__init__(*args, **kw)
+        pyglet.gl.glEnable(pyglet.gl.GL_TEXTURE_2D)
+        pyglet.gl.glEnable(pyglet.gl.GL_BLEND)
+        pyglet.gl.glDisable(pyglet.gl.GL_DEPTH_TEST)
+        pyglet.gl.glBlendFunc(pyglet.gl.GL_SRC_ALPHA, pyglet.gl.GL_ONE_MINUS_SRC_ALPHA)
+
+        self.flag_send = False
+        self.colors = [Color(), Color(), Color(), Color()]
+
+
+    def readline(self):
+        return "OK"
+        #if self.flag_send:
+        #    return self.message
+
+        #self.flag_send = False
+
+    def write(self, request):
+
+        tokens = request.split(' ')
+
+        if tokens[0] == 'FRAME':
+
+            idx = 0
+            channels = tokens[1:]
+            for channel in channels:
+                try:
+                    value = int(channel)
+                    channels[idx] = value
+
+                except Exception:
+                    self.flag_send = True
+                    self.message = 'You failed at supplying proper integer parameters'
+                    return
+
+                idx += 1
+
+            led = 0
+            chan = 0
+
+            channel_names = ['red', 'green', 'blue']
+
+            for value in channels:
+
+                channel_name = channel_names[chan] 
+                self.colors[led].__setattr__(channel_name, value)
+
+                chan += 1
+
+                if chan > 2:
+                    chan = 0
+                    led += 1
+
+            print "Updated colors: ", self.colors
+
+            self.clear()
+            self.update()
+
+
+    def update(self):
+
+        vertex_coords = [
+            [
+                0,0,
+                int(round(self.width / 2)), 0,
+                int(round(self.width / 2)), int(round(self.height / 2)),
+                0, int(round(self.height / 2))
+            ],
+
+            [
+                int(round(self.width / 2)) + 1, 0,
+                self.width, 0,
+                self.width, int(round(self.height / 2)),
+                int(round(self.width / 2)) + 1, int(round(self.height / 2))
+            ],
+
+            [
+                0, int(round(self.height / 2)) + 1,
+                int(round(self.width / 2)), int(round(self.height / 2)) + 1,
+                int(round(self.width / 2)), self.height,
+                0, self.height
+            ],
+
+            [
+                int(round(self.width / 2)) + 1, int(round(self.height / 2)) + 1,
+                self.width, int(round(self.height / 2)) + 1,
+                self.width, self.height,
+                int(round(self.width / 2)) + 1, self.height
+            ]
+        ]
+
+
+        idx = 0
+        for color in self.colors:
+
+            vc = [color.red / 255.0, color.green / 255.0, color.blue / 255.0]
+
+            vertex_colors = []
+
+            vertex_colors += vc
+            vertex_colors += vc
+            vertex_colors += vc
+            vertex_colors += vc
+            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
+            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
+            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
+            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
+
+            pyglet.graphics.draw(len(vertex_coords[idx])/2, pyglet.gl.GL_QUADS,
+                ('v2f', vertex_coords[idx]),
+                ('c3f', vertex_colors)
+            )
+
+            idx += 1
+
+        pyglet.clock.tick()
+
+        for window in pyglet.app.windows:
+            window.switch_to()
+            window.dispatch_events()
+            window.dispatch_event('on_draw')
+            window.flip()
 
 
 class Color(object):
@@ -243,7 +380,7 @@ class Display(Layer):
             print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100
 
 
-class Pattern(object):
+class Pattern(object): # TODO: Make Pattern inherit from Layer!
 
     display = None
 
@@ -363,19 +500,37 @@ class Irrlicht(Pattern):
 
 if __name__ == '__main__':
 
-    conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
+    #conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
+    conn = Emulator() 
     layer_1 = Layer([Color(), Color(), Color(), Color()])
     layer_2 = Layer([Color(), Color(), Color(), Color()])
     layer_3 = Layer([Color(), Color(), Color(), Color()])
-    display = Display(conn, [Color(), Color(), Color(), Color()], layers=[layer_1, layer_2, layer_3])
+    layer_4 = Layer([Color(), Color(), Color(), Color()])
+    display = Display(conn, [Color(), Color(), Color(), Color()], layers=[layer_1, layer_2, layer_3, layer_4])
     #pattern = HSVRotate(layer_1)
 
-    pattern_1 = Irrlicht(layer_1, Color(hue=340, saturation=1, value=1.0), step=10.8, spot_width=180)
-    pattern_1.deg = 180
+    # WHOOP WHOOP ITS DA LIGHT OF DA POLICE
+    #pattern_1 = Irrlicht(layer_1, Color(hue=340, saturation=1, value=0.03), step=8, spot_width=180)
+    #pattern_1.deg = 180
+    #pattern_2 = Irrlicht(layer_2, Color(hue=200, saturation=1, value=0.03), step=8, spot_width=180)
 
-    pattern_2 = Irrlicht(layer_2, Color(hue=200, saturation=1, value=1.0), step=10.8, spot_width=180)
+    #pattern_1 = Irrlicht(layer_1, Color(hue=250, saturation=1, value=0.5), step=0.36, spot_width=270)
+    #pattern_2 = Irrlicht(layer_2, Color(hue=30, saturation=1, value=0.8), step=0.36, spot_width=90)
+    #pattern_2.deg = 180
+    #pattern_3 = Irrlicht(layer_3, Color(hue=90, saturation=1, value=1.0), step=-0.2, spot_width=270)
 
-    pattern_3 = Irrlicht(layer_3, Color(hue=40, saturation=1, value=0.8), step=-1.8)
+    # water-ish
+    pattern_1 = Irrlicht(layer_1, Color(hue=200, saturation=1, value=0.2), step=2.17, spot_width=200)
+    pattern_2 = Irrlicht(layer_2, Color(hue=190, saturation=1, value=0.2), step=-4.23, spot_width=200)
+    pattern_3 = Irrlicht(layer_3, Color(hue=240, saturation=1, value=0.05), step=-16.1)
+    pattern_4 = Irrlicht(layer_4, Color(hue=170, saturation=1, value=0.05), step=18.3)
+
+    # fire-ish
+    #pattern_1 = Irrlicht(layer_1, Color(hue=20, saturation=1, value=0.2), step=2, spot_width=200)
+    #pattern_1.deg = 180
+    #pattern_2 = Irrlicht(layer_2, Color(hue=40, saturation=1, value=1), step=-4, spot_width=200)
+    #pattern_3 = Irrlicht(layer_3, Color(hue=20, saturation=1, value=0.217), step=-16)
+    #pattern_4 = Irrlicht(layer_4, Color(hue=40, saturation=1, value=0.264317), step=12)
 
     sleep(2)
 
@@ -384,6 +539,7 @@ if __name__ == '__main__':
         pattern_1.update()
         pattern_2.update()
         pattern_3.update()
+        pattern_4.update()
 
         display.update()
         display.render()
