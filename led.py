@@ -2,10 +2,15 @@
 # -*- coding:utf-8 -*-
 
 import colorsys
+import multiprocessing
 import pyglet
+import time
 
 from serial import Serial
-from time import sleep
+from sys import exit
+
+import util
+import audio
 
 
 class Emulator(pyglet.window.Window):
@@ -13,6 +18,7 @@ class Emulator(pyglet.window.Window):
     flag_send = None
     message = None
     colors = None
+    amplitudes = None
 
     def __init__(self, *args, **kw):
 
@@ -73,7 +79,7 @@ class Emulator(pyglet.window.Window):
                     chan = 0
                     led += 1
 
-            print "Updated colors: ", self.colors
+            #print "Updated colors: ", self.colors
 
             self.clear()
             self.update()
@@ -81,61 +87,94 @@ class Emulator(pyglet.window.Window):
 
     def update(self):
 
+        half_width = int(round(self.width / 2))
+        half_height = int(round(self.height / 2))
+
         vertex_coords = [
 
-            [
-                0, int(round(self.height / 2)) + 1,
-                int(round(self.width / 2)), int(round(self.height / 2)) + 1,
-                int(round(self.width / 2)), self.height,
-                0, self.height
-            ],
+            0, half_height + 1,
+            half_width, half_height + 1,
+            half_width, self.height,
+            0, self.height,
 
-            [
-                int(round(self.width / 2)) + 1, int(round(self.height / 2)) + 1,
-                self.width, int(round(self.height / 2)) + 1,
-                self.width, self.height,
-                int(round(self.width / 2)) + 1, self.height
-            ],
+            half_width + 1, half_height + 1,
+            self.width, half_height + 1,
+            self.width, self.height,
+            half_width + 1, self.height,
 
-            [
-                int(round(self.width / 2)) + 1, 0,
-                self.width, 0,
-                self.width, int(round(self.height / 2)),
-                int(round(self.width / 2)) + 1, int(round(self.height / 2))
-            ],
+            half_width + 1, 0,
+            self.width, 0,
+            self.width, half_height,
+            half_width + 1, half_height,
 
-            [
-                0,0,
-                int(round(self.width / 2)), 0,
-                int(round(self.width / 2)), int(round(self.height / 2)),
-                0, int(round(self.height / 2))
-            ]
-
+            0,0,
+            int(round(self.width / 2)), 0,
+            int(round(self.width / 2)), int(round(self.height / 2)),
+            0, int(round(self.height / 2))
         ]
 
 
+        vertex_colors = []
         idx = 0
         for color in self.colors:
 
             vc = [color.red / 255.0, color.green / 255.0, color.blue / 255.0]
 
-            vertex_colors = []
-
             vertex_colors += vc
             vertex_colors += vc
             vertex_colors += vc
             vertex_colors += vc
-            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
-            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
-            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
-            #vertex_colors += [self.smoothed_amplitudes[0], self.smoothed_amplitudes[1], self.smoothed_amplitudes[2]]
-
-            pyglet.graphics.draw(len(vertex_coords[idx])/2, pyglet.gl.GL_QUADS,
-                ('v2f', vertex_coords[idx]),
-                ('c3f', vertex_colors)
-            )
 
             idx += 1
+
+        pyglet.graphics.draw(len(vertex_coords)/2, pyglet.gl.GL_QUADS,
+            ('v2f', vertex_coords),
+            ('c3f', vertex_colors)
+        )
+
+        if self.amplitudes is not None:
+
+            x = 0
+            y_bottom = 1
+            
+            spectrogram_vertices = []
+            spectrogram_colors = []
+            for amplitude in self.amplitudes:
+
+                x+= 1
+                y_top = amplitude * (self.height/2)
+
+                spectrogram_vertices += [
+                    x, y_bottom,
+                    x+1, y_bottom,
+                    x+1, y_top,
+                    x, y_top
+                ]
+
+                spectrogram_colors += [
+                    0.5, 0.5, 0.5, 0.5,
+                    0.5, 0.5, 0.5, 0.5,
+                    0.5, 0.5, 0.5, 0.8,
+                    0.8, 0.5, 0.5, 0.8
+                ]
+
+#                pyglet.graphics.draw(4, pyglet.gl.GL_QUADS,
+#                    ('v2f', [
+#                        x, y_bottom,
+#                        x+1, y_bottom,
+#                        x+1, y_top,
+#                        x, y_top
+#                    ]),
+#                    ('c4f', [
+#                        0.5, 0.5, 0.5, 0.5,
+#                        0.5, 0.5, 0.5, 0.5,
+#                        0.5, 0.5, 0.5, 0.8,
+#                        0.8, 0.5, 0.5, 0.8
+#                    ])
+#                )
+
+            pyglet.graphics.draw(int(len(spectrogram_vertices) / 2), pyglet.gl.GL_QUADS, ('v2f', spectrogram_vertices), ('c4f', spectrogram_colors))
+
 
         pyglet.clock.tick()
 
@@ -339,12 +378,12 @@ class Layer(list):
 
 class Display(Layer):
 
-    conn = None
+    output = None
     layers = None
     successes = None
     failures = None
 
-    def __init__(self, conn, *args, **kw):
+    def __init__(self, output, *args, **kw):
 
         if kw.has_key('layers'):
             self.layers = kw.pop('layers')
@@ -353,7 +392,7 @@ class Display(Layer):
 
         super(Display, self).__init__(*args, **kw)
 
-        self.conn = conn
+        self.output = output
         self.successes = 0
         self.failures = 0
 
@@ -369,8 +408,8 @@ class Display(Layer):
 
         line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
         #print line
-        self.conn.write(line)
-        resp = self.conn.readline()
+        self.output.write(line)
+        resp = self.output.readline()
 
         if resp.startswith('OK'):
             self.successes += 1
@@ -499,22 +538,52 @@ class Irrlicht(Pattern):
 
 
 
+class Visualizer(Pattern):   
+
+    def update(self, amplitudes):
+
+        super(Visualizer, self).update()
+
+        self.display[0].saturation = 1
+        self.display[1].saturation = 1
+        self.display[2].saturation = 1
+        self.display[3].saturation = 1
+
+        self.display[0].hue = 0
+        self.display[1].hue = 90
+        self.display[2].hue = 180
+        self.display[3].hue = 270
+
+        amps = util.octave_amplitudes(amplitudes, 8)
+        self.display[0].value = amps[2]
+        self.display[1].value = amps[3]
+        self.display[2].value = amps[4]
+        self.display[3].value = amps[5]
+
+
 
 if __name__ == '__main__':
 
-    #conn = Serial('/dev/cuaU1', 57600, timeout=1.5)
-    conn = Emulator() 
+    #output = Serial('/dev/cuaU1', 57600, timeout=1.5)
+    output = Emulator(width=1024, height=600)
+
+    analyzer_read, analyzer_write = multiprocessing.Pipe(False)
+
+    analyzer = audio.Analyzer(analyzer_write, '/tmp/mpd.fifo', window_size=4096, std=128)
+    analyzer.start()
+    print "Analyzer started."
+
     layer_1 = Layer([Color(), Color(), Color(), Color()])
     layer_2 = Layer([Color(), Color(), Color(), Color()])
     layer_3 = Layer([Color(), Color(), Color(), Color()])
     layer_4 = Layer([Color(), Color(), Color(), Color()])
-    display = Display(conn, [Color(), Color(), Color(), Color()], layers=[layer_1, layer_2, layer_3, layer_4])
+    display = Display(output, [Color(), Color(), Color(), Color()], layers=[layer_1, layer_2, layer_3, layer_4])
     #pattern = HSVRotate(layer_1)
 
     # WHOOP WHOOP ITS DA LIGHT OF DA POLICE
-    #pattern_1 = Irrlicht(layer_1, Color(hue=340, saturation=1, value=0.03), step=8, spot_width=180)
+    #pattern_1 = Irrlicht(layer_1, Color(hue=340, saturation=1, value=1), step=8, spot_width=140)
     #pattern_1.deg = 180
-    #pattern_2 = Irrlicht(layer_2, Color(hue=200, saturation=1, value=0.03), step=8, spot_width=180)
+    #pattern_2 = Irrlicht(layer_2, Color(hue=200, saturation=1, value=1), step=8, spot_width=140)
 
     #pattern_1 = Irrlicht(layer_1, Color(hue=250, saturation=1, value=0.5), step=0.36, spot_width=270)
     #pattern_2 = Irrlicht(layer_2, Color(hue=30, saturation=1, value=0.8), step=0.36, spot_width=90)
@@ -522,27 +591,37 @@ if __name__ == '__main__':
     #pattern_3 = Irrlicht(layer_3, Color(hue=90, saturation=1, value=1.0), step=-0.2, spot_width=270)
 
     # water-ish
-    pattern_1 = Irrlicht(layer_1, Color(hue=200, saturation=1, value=0.2), step=2.17, spot_width=120)
-    pattern_2 = Irrlicht(layer_2, Color(hue=190, saturation=1, value=0.2), step=-4.23, spot_width=200)
-    pattern_3 = Irrlicht(layer_3, Color(hue=240, saturation=1, value=0.05), step=-16.1)
-    pattern_4 = Irrlicht(layer_4, Color(hue=170, saturation=1, value=0.05), step=18.3)
+    #pattern_1 = Irrlicht(layer_1, Color(hue=200, saturation=1, value=0.2), step=2.17, spot_width=120)
+    #pattern_2 = Irrlicht(layer_2, Color(hue=190, saturation=1, value=0.2), step=-4.23, spot_width=200)
+    #pattern_3 = Irrlicht(layer_3, Color(hue=240, saturation=1, value=0.05), step=-16.1)
+    #pattern_4 = Irrlicht(layer_4, Color(hue=170, saturation=1, value=0.05), step=18.3)
 
     # fire-ish
     #pattern_1 = Irrlicht(layer_1, Color(hue=20, saturation=1, value=0.2), step=2, spot_width=200)
     #pattern_1.deg = 180
     #pattern_2 = Irrlicht(layer_2, Color(hue=40, saturation=1, value=1), step=-4, spot_width=200)
-    #pattern_3 = Irrlicht(layer_3, Color(hue=20, saturation=1, value=0.217), step=-16)
+    #pattern_3 = Irrlicht(layer_3, Color(hue=320, saturation=1, value=0.217), step=-16)
     #pattern_4 = Irrlicht(layer_4, Color(hue=40, saturation=1, value=0.264317), step=12)
 
-    sleep(2)
+
+    #pattern_1 = Ravelicht(layer_1, Color(hue=320, saturation=1, value=1), spot_width=120)
+    #pattern_2 = Irrlicht(layer_2, Color(hue=180, saturation=1, value=1), step=-14, spot_width=140)
+    pattern_2 = Visualizer(layer_2)
+
+    time.sleep(2)
+
 
     while True:
 
-        pattern_1.update()
-        pattern_2.update()
-        pattern_3.update()
-        pattern_4.update()
+        if analyzer_read.poll():
+            amplitudes = analyzer_read.recv() # not very elegant, but this lets us end up with the most current amplitude set and clears the pipes' queue
+            if(isinstance(output, Emulator)):
+                output.amplitudes = amplitudes
 
-        display.update()
-        display.render()
-        sleep(0.01)
+            #pattern_1.update(amplitudes)
+            pattern_2.update(amplitudes)
+            #pattern_3.update()
+            #pattern_4.update()
+
+            display.update()
+            display.render()
