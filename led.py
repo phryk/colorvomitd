@@ -537,7 +537,6 @@ class Irrlicht(Pattern):
             idx += 1
 
 
-
 class Visualizer(Pattern):   
 
     def update(self, amplitudes):
@@ -554,12 +553,21 @@ class Visualizer(Pattern):
         self.display[2].hue = 180
         self.display[3].hue = 270
 
-        amps = util.octave_amplitudes(amplitudes, 8)
-        self.display[0].value = amps[2]
-        self.display[1].value = amps[3]
-        self.display[2].value = amps[4]
-        self.display[3].value = amps[5]
+        amps = util.octave_amplitudes(amplitudes, 4)
+        self.display[0].value = amps[0]
+        self.display[1].value = amps[1]
+        self.display[2].value = amps[2]
+        self.display[3].value = amps[3]
 
+class Ravelicht(Irrlicht):
+
+    def update(self, amplitudes):
+
+        bass, mid, heights = util.octave_amplitudes(amplitudes, 3)
+        self.color.hue += bass * 36
+        self.step = mid * 36
+
+        super(Ravelicht, self).update()
 
 
 if __name__ == '__main__':
@@ -604,9 +612,9 @@ if __name__ == '__main__':
     #pattern_4 = Irrlicht(layer_4, Color(hue=40, saturation=1, value=0.264317), step=12)
 
 
-    #pattern_1 = Ravelicht(layer_1, Color(hue=320, saturation=1, value=1), spot_width=120)
+    pattern_1 = Ravelicht(layer_1, Color(hue=320, saturation=1, value=1), spot_width=120)
     #pattern_2 = Irrlicht(layer_2, Color(hue=180, saturation=1, value=1), step=-14, spot_width=140)
-    pattern_2 = Visualizer(layer_2)
+    #pattern_2 = Visualizer(layer_2)
 
     time.sleep(2)
 
@@ -618,8 +626,8 @@ if __name__ == '__main__':
             if(isinstance(output, Emulator)):
                 output.amplitudes = amplitudes
 
-            #pattern_1.update(amplitudes)
-            pattern_2.update(amplitudes)
+            pattern_1.update(amplitudes)
+            #pattern_2.update(amplitudes)
             #pattern_3.update()
             #pattern_4.update()
 
