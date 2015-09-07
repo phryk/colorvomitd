@@ -188,7 +188,7 @@ def octave_amplitudes(amplitudes, num_bins):
             #bin = amplitudes[lower:upper].mean()
             #bin = sum(amplitudes[lower:upper]) / float(len(amplitudes[lower:upper])) # average instead of mean
             #bin = numpy.max(amplitudes[lower:upper]) # this is an ugly hack instead of doing, like, statistical analysis or anything.
-            bin = (numpy.max(amplitudes[lower:upper]) + numpy.mean(amplitudes[lower:upper])) / 2
+            bin = (numpy.max(amplitudes[lower:upper]) + numpy.mean(amplitudes[lower:upper])) / 2 # mean and max mixed
 
         if numpy.isnan(bin):
             bin = numpy.float64(0)

@@ -13,6 +13,17 @@ import audio
 
 class Layer(list):
 
+
+    def __init__(self, *args, **kw):
+
+        size = 0 if not kw.has_key('size') else kw.pop('size')
+
+        super(Layer, self).__init__(*args, **kw)
+
+        for i in range(0, size):
+            self.append(util.Color())
+
+
     def lighten(self, other):
 
         if isinstance(other, int) or isinstance(other, float):
@@ -50,7 +61,7 @@ class Layer(list):
         for spot in self:
             idx += 1
             try:
-                color = display[idx]
+                color = other[idx]
             except IndexError:
                 color = util.Color()
 
@@ -102,14 +113,14 @@ class Display(Layer):
             print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100
 
 
-class Pattern(object): # TODO: Make Pattern inherit from Layer!
+class Pattern(Layer): # TODO: Make Pattern inherit from Layer!
 
-    display = None
+    #layer = None
 
-    def __init__(self, display):
+    #def __init__(self, layer):
 
-        super(Pattern, self).__init__()
-        self.display = display
+    #    super(Pattern, self).__init__()
+    #    self.layer = layer
 
     def update(self):
         pass
@@ -120,23 +131,23 @@ class HSVRotate(Pattern):
     idx = None
     hue = None
 
-    def __init__(self, display):
+    def __init__(self, *args, **kw):
 
-        super(HSVRotate, self).__init__(display)
+        super(HSVRotate, self).__init__(*args, **kw)
         self.idx = 0
         self.hue = 0
 
     def update(self):
 
-        spot = self.display[self.idx]
+        spot = self[self.idx]
         if(self.hue >= 359):
             self.hue = 0
             self.idx += 1
 
-            if self.idx >= len(self.display):
+            if self.idx >= len(self):
                 self.idx = 0
         
-            spot = self.display[self.idx]
+            spot = self[self.idx]
 
         else:
             self.hue += 1
@@ -156,18 +167,18 @@ class Irrlicht(Pattern):
     spot_coords = None
 
 
-    def __init__(self, display, color, step=3.6, spot_width=None):
+    def __init__(self, color, step=3.6, spot_width=None, **kw):
 
-        super(Irrlicht, self).__init__(display)
+        super(Irrlicht, self).__init__(**kw)
 
         self.deg = 0
         self.color = color
         self.step = step
 
-        self.spot_distance = 360.0 / len(self.display)
+        self.spot_distance = 360.0 / len(self)
         self.spot_coords = []
 
-        for i in range(0, len(self.display)):
+        for i in range(0, len(self)):
             self.spot_coords.append(i * self.spot_distance)
 
         if spot_width:
@@ -210,7 +221,7 @@ class Irrlicht(Pattern):
             else:
                 multiplier = abs(distance - self.spot_width) / self.spot_width
 
-            spot = self.display[idx]
+            spot = self[idx]
             spot.red = self.color.red * multiplier
             spot.green = self.color.green * multiplier
             spot.blue = self.color.blue * multiplier
@@ -224,21 +235,22 @@ class Visualizer(Pattern):
 
         super(Visualizer, self).update()
 
-        self.display[0].saturation = 1
-        self.display[1].saturation = 1
-        self.display[2].saturation = 1
-        self.display[3].saturation = 1
+        self[0].saturation = 1
+        self[1].saturation = 1
+        self[2].saturation = 1
+        self[3].saturation = 1
 
-        self.display[0].hue = 0
-        self.display[1].hue = 90
-        self.display[2].hue = 180
-        self.display[3].hue = 270
+        self[0].hue = 0
+        self[1].hue = 90
+        self[2].hue = 180
+        self[3].hue = 270
 
         amps = util.octave_amplitudes(amplitudes, 4)
-        self.display[0].value = amps[0]
-        self.display[1].value = amps[1]
-        self.display[2].value = amps[2]
-        self.display[3].value = amps[3]
+        self[0].value = amps[0]
+        self[1].value = amps[1]
+        self[2].value = amps[2]
+        self[3].value = amps[3]
+
 
 class Ravelicht(Irrlicht):
 
@@ -262,22 +274,88 @@ class Ravelicht(Irrlicht):
         self.smoothed_bass = (self.smoothed_bass * 0.95) + (bass * 0.05)
         self.color.hue = self.initial_hue + (self.smoothed_bass * 60) - 30
         self.color.value = self.smoothed_bass * 2
-        self.step = self.smoothed_bass * 8
+        self.step = self.smoothed_bass * 16
 
         super(Ravelicht, self).update()
 
+
+class Ravelichter(Visualizer):
+
+    basshue = 40
+    midhue = 100
+    trebhue = 260
+
+    basslicht = None
+    midlicht = None
+    treblicht = None
+
+    smoothed_bass = None
+    smoothed_mids = None
+    smoothed_heights = None
+
+    def __init__(self, *args, **kw):
+
+        super(Ravelichter, self).__init__(*args, **kw)
+
+        self.basslicht = Irrlicht(color=util.Color(hue=self.basshue, saturation=1, value=1), size=len(self), spot_width=120)
+        self.midlicht = Irrlicht(color=util.Color(hue=self.midhue, saturation=1, value=1), size=len(self), spot_width=90)
+        self.midlicht.deg = 90
+        self.treblicht = Irrlicht(color=util.Color(hue=self.trebhue, saturation=1, value=1), size=len(self), spot_width=90)
+        self.treblicht.deg = 270
+
+        self.smoothed_bass = 0
+        self.smoothed_mids = 0
+        self.smoothed_heights = 0
+
+
+    def update(self, amplitudes):
+
+        self.darken(255)
+        bass, mids, heights = util.octave_amplitudes(amplitudes, 3)
+        self.smoothed_bass = (self.smoothed_bass * 0.95) + (bass * 0.05)
+        self.smoothed_mids = (self.smoothed_mids * 0.9) + (mids * 0.1)
+        self.smoothed_heights = (self.smoothed_heights * 0.75) + (heights * 0.25)
+
+
+        self.basslicht.color.hue = self.basshue + (self.smoothed_bass * 60) - 30
+        self.basslicht.color.value = self.smoothed_bass# * 2
+        #self.basslicht.color.value = 0
+        self.basslicht.step = self.smoothed_bass * -16
+
+        self.midlicht.color.hue = self.midhue + (self.smoothed_mids * 60) - 30
+        self.midlicht.color.value = self.smoothed_mids * 2
+        self.midlicht.step = self.smoothed_mids * -8
+
+        self.treblicht.color.hue = self.trebhue + (self.smoothed_heights * 60) - 30
+        self.treblicht.color.value = self.smoothed_heights * 2
+        self.treblicht.step = self.smoothed_heights * 16
+
+        self.basslicht.update()
+        self.midlicht.update()
+        self.treblicht.update()
+
+        self.lighten(self.midlicht)
+        self.lighten(self.treblicht)
+        self.lighten(self.basslicht)
+
+
 # temporary config, TODO: move into some sort of config file?
-WITH_EMULATOR = True
+WITH_EMULATOR = False
+SERIAL_DEVICE = '/dev/cuaU1'
+BAUD = 57600
+EMULATOR_WIDTH = 1024
+EMULATOR_HEIGHT = 400
 
 
 if __name__ == '__main__':
 
 
     if WITH_EMULATOR:
-        from emulator import Emulator # importing this without X fails
-        output = Emulator(width=1024, height=600)
+        from emulator import CombinedOutput # importing this without X fails
+        #output = Emulator(width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
+        output = CombinedOutput(SERIAL_DEVICE, BAUD, width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
     else:
-        output = Serial('/dev/cuaU0', 57600, timeout=1.5)
+        output = Serial(SERIAL_DEVICE, BAUD, timeout=1.5)
 
     analyzer_read, analyzer_write = multiprocessing.Pipe(False)
 
@@ -285,11 +363,12 @@ if __name__ == '__main__':
     analyzer.start()
     print "Analyzer started."
 
-    layer_1 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
-    layer_2 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
-    layer_3 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
-    layer_4 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
-    display = Display(output, [util.Color(), util.Color(), util.Color(), util.Color()], layers=[layer_1, layer_2, layer_3, layer_4])
+    #layer_1 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
+    #layer_2 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
+    #layer_3 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
+    #layer_4 = Layer([util.Color(), util.Color(), util.Color(), util.Color()])
+
+
     #pattern = HSVRotate(layer_1)
 
     # WHOOP WHOOP ITS DA LIGHT OF DA POLICE
@@ -316,9 +395,13 @@ if __name__ == '__main__':
     #pattern_4 = Irrlicht(layer_4, util.Color(hue=40, saturation=1, value=0.264317), step=12)
 
 
-    pattern_1 = Ravelicht(layer_1, util.Color(hue=320, saturation=1, value=1), spot_width=120)
+    #pattern_1 = Ravelicht(4, util.Color(hue=40, saturation=1, value=1), spot_width=120)
     #pattern_2 = Irrlicht(layer_2, util.Color(hue=180, saturation=1, value=1), step=-14, spot_width=140)
     #pattern_2 = Visualizer(layer_2)
+    
+    pattern_1 = Ravelichter(size=4)
+
+    display = Display(output, size=4, layers=[pattern_1])
 
     time.sleep(2)
 
@@ -328,7 +411,7 @@ if __name__ == '__main__':
         if analyzer_read.poll():
             amplitudes = analyzer_read.recv()
             if WITH_EMULATOR:
-                output.amplitudes = amplitudes
+                output.emulator.amplitudes = amplitudes
 
             pattern_1.update(amplitudes)
             #pattern_2.update(amplitudes)

@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from serial import Serial
+
 import pyglet
 
 import util
+
 
 class Emulator(pyglet.window.Window):
 
@@ -149,21 +152,6 @@ class Emulator(pyglet.window.Window):
                     0.8, 0.5, 0.5, 0.8
                 ]
 
-#                pyglet.graphics.draw(4, pyglet.gl.GL_QUADS,
-#                    ('v2f', [
-#                        x, y_bottom,
-#                        x+1, y_bottom,
-#                        x+1, y_top,
-#                        x, y_top
-#                    ]),
-#                    ('c4f', [
-#                        0.5, 0.5, 0.5, 0.5,
-#                        0.5, 0.5, 0.5, 0.5,
-#                        0.5, 0.5, 0.5, 0.8,
-#                        0.8, 0.5, 0.5, 0.8
-#                    ])
-#                )
-
             pyglet.graphics.draw(int(len(spectrogram_vertices) / 2), pyglet.gl.GL_QUADS, ('v2f', spectrogram_vertices), ('c4f', spectrogram_colors))
 
 
@@ -174,3 +162,53 @@ class Emulator(pyglet.window.Window):
             window.dispatch_events()
             window.dispatch_event('on_draw')
             window.flip()
+
+
+
+class CombinedOutput(object):
+
+    serial_device = None
+    serial_line = None
+    emulator = None
+    baud = None
+    timeout = None
+    width = None
+    height = None
+
+    def __init__(self, serial_device=None, baud=None, timeout=None, width=None, height=None): 
+
+        if not serial_device:
+            serial_device = '/dev/cuaU0'
+
+        if not baud:
+            baud = 57600
+
+        if not timeout:
+            timeout = 0.5
+
+        if not width:
+            width = 1024
+
+        if not height:
+            height = 600
+
+        self.serial_device = serial_device
+        self.baud = baud
+        self.timeout = timeout
+        self.width = width
+        self.height = height
+
+        self.serial_line = Serial(self.serial_device, self.baud, timeout=self.timeout)
+        self.emulator = Emulator(self.width, self.height)
+
+
+    def readline(self):
+        return self.serial_line.readline()
+
+    def write(self, request):
+        self.serial_line.write(request)
+        self.emulator.write(request)
+
+    def update(self):
+        self.serial_line.update()
+        self.emulator.update()
