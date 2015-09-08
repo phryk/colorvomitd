@@ -24,6 +24,18 @@ class Layer(list):
             self.append(util.Color())
 
 
+    def blend(self, other, mode='normal'):
+
+        for idx in range(0, len(self)):
+
+            try:
+                color = other[idx]
+            except IndexError:
+                color = util.Color()
+
+            self[idx].blend(color, mode=mode)
+
+
     def lighten(self, other):
 
         if isinstance(other, int) or isinstance(other, float):
@@ -31,7 +43,7 @@ class Layer(list):
             d = Layer()
 
             for spot in self:
-                d.append(util.Color(red=other, green=other, blue=other))
+                d.append(util.Color(red=other, green=other, blue=other, alpha=1.0))
 
             other = d
 
@@ -53,7 +65,7 @@ class Layer(list):
             d = Layer()
 
             for spot in self:
-                d.append(util.Color(red=other, green=other, blue=other))
+                d.append(util.Color(red=other, green=other, blue=other, alpha=1.0))
 
             other = d
 
@@ -84,6 +96,11 @@ class Display(Layer):
 
         super(Display, self).__init__(*args, **kw)
 
+        idx = 0
+        for color in self:
+            self[idx].alpha = 1.0 # This is the canvas. It is not translucent.
+            idx += 1
+
         self.output = output
         self.successes = 0
         self.failures = 0
@@ -93,11 +110,13 @@ class Display(Layer):
 
         self.darken(255)
         for layer in self.layers:
-            self.lighten(layer)
+            self.blend(layer)
 
 
     def render(self):
 
+        #for item in self:
+            #print "render item: ", item.__repr__()
         line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
         #print line
         self.output.write(line)
@@ -113,7 +132,7 @@ class Display(Layer):
             print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100
 
 
-class Pattern(Layer): # TODO: Make Pattern inherit from Layer!
+class Pattern(Layer):
 
     #layer = None
 
@@ -222,9 +241,10 @@ class Irrlicht(Pattern):
                 multiplier = abs(distance - self.spot_width) / self.spot_width
 
             spot = self[idx]
-            spot.red = self.color.red * multiplier
-            spot.green = self.color.green * multiplier
-            spot.blue = self.color.blue * multiplier
+            spot.red = self.color.red #* multiplier
+            spot.green = self.color.green #* multiplier
+            spot.blue = self.color.blue #* multiplier
+            spot.alpha = multiplier * self.color.alpha
 
             idx += 1
 
@@ -297,10 +317,10 @@ class Ravelichter(Visualizer):
 
         super(Ravelichter, self).__init__(*args, **kw)
 
-        self.basslicht = Irrlicht(color=util.Color(hue=self.basshue, saturation=1, value=1), size=len(self), spot_width=120)
-        self.midlicht = Irrlicht(color=util.Color(hue=self.midhue, saturation=1, value=1), size=len(self), spot_width=90)
+        self.basslicht = Irrlicht(color=util.Color(hue=self.basshue, saturation=1, value=1, alpha=1.0), size=len(self), spot_width=120)
+        self.midlicht = Irrlicht(color=util.Color(hue=self.midhue, saturation=1, value=1, alpha=1.0), size=len(self), spot_width=90)
         self.midlicht.deg = 90
-        self.treblicht = Irrlicht(color=util.Color(hue=self.trebhue, saturation=1, value=1), size=len(self), spot_width=90)
+        self.treblicht = Irrlicht(color=util.Color(hue=self.trebhue, saturation=1, value=1, alpha=1.0), size=len(self), spot_width=90)
         self.treblicht.deg = 270
 
         self.smoothed_bass = 0
@@ -318,25 +338,25 @@ class Ravelichter(Visualizer):
 
 
         self.basslicht.color.hue = self.basshue + (self.smoothed_bass * 60) - 30
-        self.basslicht.color.value = self.smoothed_bass# * 2
+        self.basslicht.color.alpha = self.smoothed_bass * 2
         #self.basslicht.color.value = 0
         self.basslicht.step = self.smoothed_bass * -16
 
         self.midlicht.color.hue = self.midhue + (self.smoothed_mids * 60) - 30
-        self.midlicht.color.value = self.smoothed_mids * 2
+        self.midlicht.color.alpha = self.smoothed_mids * 2
         self.midlicht.step = self.smoothed_mids * -8
 
         self.treblicht.color.hue = self.trebhue + (self.smoothed_heights * 60) - 30
-        self.treblicht.color.value = self.smoothed_heights * 2
+        self.treblicht.color.alpha = self.smoothed_heights * 2
         self.treblicht.step = self.smoothed_heights * 16
 
         self.basslicht.update()
         self.midlicht.update()
         self.treblicht.update()
 
-        self.lighten(self.midlicht)
-        self.lighten(self.treblicht)
-        self.lighten(self.basslicht)
+        self.blend(self.basslicht)
+        self.blend(self.midlicht)
+        self.blend(self.treblicht)
 
 
 # temporary config, TODO: move into some sort of config file?

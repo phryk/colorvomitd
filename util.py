@@ -13,10 +13,15 @@ class Color(object):
     saturation = None
     value = None
 
-    def __init__(self, red=None, green=None, blue=None, hue=None, saturation=None, value=None):
+    alpha = None
+
+    def __init__(self, red=None, green=None, blue=None, hue=None, saturation=None, value=None, alpha=None):
 
         rgb_passed = bool(red)|bool(green)|bool(blue)
         hsv_passed = bool(hue)|bool(saturation)|bool(value)
+
+        if not alpha:
+            alpha = 0.0
 
         if rgb_passed and hsv_passed:
             raise ValueError("Color can't be initialized with RGB and HSV at the same time.")
@@ -49,6 +54,8 @@ class Color(object):
             super(Color, self).__setattr__('blue', blue)
             self._update_hsv()
 
+        super(Color, self).__setattr__('alpha', alpha)
+
 
     def __setattr__(self, key, value):
 
@@ -66,36 +73,66 @@ class Color(object):
             super(Color, self).__setattr__(key, value) 
             self._update_rgb()
 
+        else:
+            if key == 'alpha' and value > 1.0: # TODO: Might this be more fitting in another place?
+                value = 1.0
+
+            super(Color, self).__setattr__(key, value)
+
 
     def __repr__(self):
 
-        return '<%s: red %f, green %f, blue %f, hue %f, saturation %f, value %f>' % (
+        return '<%s: red %f, green %f, blue %f, hue %f, saturation %f, value %f, alpha %f>' % (
                 self.__class__.__name__,
                 self.red,
                 self.green,
                 self.blue,
                 self.hue,
                 self.saturation,
-                self.value
+                self.value,
+                self.alpha
             )
 
 
     def __str__(self):
         return "%d %d %d" % (
-            int(round(self.red)),
-            int(round(self.green)),
-            int(round(self.blue)),
+            int(round(self.red * self.alpha)),
+            int(round(self.green * self.alpha)),
+            int(round(self.blue * self.alpha)),
         )
+
+
+    def blend(self, other, mode='normal'):
+
+        if self.alpha != 1.0: # no clue how to blend with a translucent bottom layer
+            self.red = self.red * self.alpha
+            self.green = self.green * self.alpha
+            self.blue = self.blue * self.alpha
+
+            self.alpha = 1.0
+
+        if mode == 'normal':
+            own_influence = 1.0 - other.alpha
+            self.red = (self.red * own_influence) + (other.red * other.alpha)
+            self.green = (self.green * own_influence) + (other.green * other.alpha)
+            self.blue = (self.blue * own_influence) + (other.blue * other.alpha)
 
 
     def lighten(self, other):
 
         if isinstance(other, int) or isinstance(other, float):
-            other = Color(red=other, green=other, blue=other)
+            other = Color(red=other, green=other, blue=other, alpha=1.0)
 
-        red = self.red + other.red
-        green = self.green + other.green
-        blue = self.blue + other.blue
+        if self.alpha != 1.0:
+            self.red = self.red * self.alpha
+            self.green = self.green * self.alpha
+            self.blue = self.blue * self.alpha
+
+            self.alpha = 1.0
+
+        red = self.red + (other.red * other.alpha)
+        green = self.green + (other.green * other.alpha)
+        blue = self.blue + (other.blue * other.alpha)
 
         if red > 255.0:
             red = 255.0
@@ -114,7 +151,7 @@ class Color(object):
     def darken(self, other):
 
         if isinstance(other, int) or isinstance(other, float):
-            other = Color(red=other, green=other, blue=other)
+            other = Color(red=other, green=other, blue=other, alpha=1.0)
 
         red = self.red - other.red
         green = self.green - other.green

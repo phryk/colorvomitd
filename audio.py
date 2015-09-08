@@ -93,7 +93,7 @@ class Analyzer(multiprocessing.Process):
             self.std = std
         else:
             self.std = False
-        self.max = 19787723 #TODO: Killme
+        self.max = 19787723 #Got this from earlier run
 
         super(Analyzer, self).__init__(*args, **kw)
         self.daemon = True # Makes the parent kill this child process when the parent dies. Yay for infanticide! \o/
