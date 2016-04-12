@@ -93,7 +93,8 @@ class Analyzer(multiprocessing.Process):
             self.std = std
         else:
             self.std = False
-        self.max = 19787723 #Got this from earlier run
+        #self.max = 19787723 #Got this from earlier run
+        self.max = 16000000
 
         super(Analyzer, self).__init__(*args, **kw)
         self.daemon = True # Makes the parent kill this child process when the parent dies. Yay for infanticide! \o/
@@ -134,6 +135,12 @@ class Analyzer(multiprocessing.Process):
             if tm > self.max:
                 self.max = tm
                 print self.max
+            elif self.max > 16000000:
+                self.max = self.max * 0.99999 # slowly "normalize" over time
+                #print "normalization"
+                #print self.max
+                #print "=========="
+
             amplitudes = fft[0:n/2] / self.max
         #amplitudes = fft[0:n/2] / 3200000
 

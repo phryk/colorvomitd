@@ -170,9 +170,6 @@ class Color(object):
         self.green = green
         self.blue = blue
 
-    
-    def hex(self):
-        return "%.2X%.2X%.2X" % (self.red, self.green, self.blue)
 
     def _update_hsv(self):
 
@@ -190,52 +187,123 @@ class Color(object):
         super(Color, self).__setattr__('blue', blue * 255.0)
 
 
-def bin_ranges(length, num_bins):
 
-        length = numpy.float64(length)
-        bin_range = []
-        current_range = length / (2 ** num_bins -1)
-        
-        lower = 0
-        upper = current_range -1
-        if upper < lower:
-            upper = lower
-        bin_range.append([int(round(lower)), int(round(upper))])
-
-        for i in range(1, num_bins):
-
-            current_range *=2
-
-            lower = upper + 1
-            upper = lower + current_range - 1
-            if upper < lower:
-                upper = lower
-
-            bin_range.append([int(round(lower)), int(round(upper))])
-
-        return bin_range
+class Layer(list):
 
 
-def octave_amplitudes(amplitudes, num_bins):
+    def __init__(self, *args, **kw):
 
-    bins = numpy.zeros(num_bins)
-    i = 0
-    ranges = bin_ranges(len(amplitudes), num_bins)
-    for lower, upper in ranges: 
+        size = 0 if not kw.has_key('size') else kw.pop('size')
 
-        if lower == upper:
-            bin = amplitudes[lower]
+        super(Layer, self).__init__(*args, **kw)
 
-        else: 
-            #bin = amplitudes[lower:upper].mean()
-            #bin = sum(amplitudes[lower:upper]) / float(len(amplitudes[lower:upper])) # average instead of mean
-            #bin = numpy.max(amplitudes[lower:upper]) # this is an ugly hack instead of doing, like, statistical analysis or anything.
-            bin = (numpy.max(amplitudes[lower:upper]) + numpy.mean(amplitudes[lower:upper])) / 2 # mean and max mixed
+        for i in range(0, size):
+            self.append(util.Color())
 
-        if numpy.isnan(bin):
-            bin = numpy.float64(0)
 
-        bins[i] = bin
-        i += 1
+    def blend(self, other, mode='normal'):
 
-    return bins
+        for idx in range(0, len(self)):
+
+            try:
+                color = other[idx]
+            except IndexError:
+                color = util.Color()
+
+            self[idx].blend(color, mode=mode)
+
+
+    def lighten(self, other):
+
+        if isinstance(other, int) or isinstance(other, float):
+
+            d = Layer()
+
+            for spot in self:
+                d.append(util.Color(red=other, green=other, blue=other, alpha=1.0))
+
+            other = d
+
+        idx = -1
+        for spot in self:
+            idx += 1
+            try:
+                color = other[idx]
+            except IndexError:
+                color = util.Color()
+
+            self[idx].lighten(color)
+
+
+    def darken(self, other):
+
+        if isinstance(other, int) or isinstance(other, float):
+
+            d = Layer()
+
+            for spot in self:
+                d.append(util.Color(red=other, green=other, blue=other, alpha=1.0))
+
+            other = d
+
+        idx = -1
+        for spot in self:
+            idx += 1
+            try:
+                color = other[idx]
+            except IndexError:
+                color = util.Color()
+
+            self[idx].darken(color)
+
+
+class Display(Layer):
+
+    output = None
+    layers = None
+    successes = None
+    failures = None
+
+    def __init__(self, output, *args, **kw):
+
+        if kw.has_key('layers'):
+            self.layers = kw.pop('layers')
+        else:
+            self.layers = []
+
+        super(Display, self).__init__(*args, **kw)
+
+        idx = 0
+        for color in self:
+            self[idx].alpha = 1.0 # This is the canvas. It is not translucent.
+            idx += 1
+
+        self.output = output
+        self.successes = 0
+        self.failures = 0
+
+
+    def update(self):
+
+        self.darken(255)
+        for layer in self.layers:
+            self.blend(layer)
+
+
+    def render(self):
+
+        #for item in self:
+            #print "render item: ", item.__repr__()
+        line = 'FRAME %s\n' % (' '.join([str(item) for item in self]),)
+        #print line
+        self.output.write(line)
+        resp = self.output.readline()
+
+        if resp.startswith('OK'):
+            self.successes += 1
+        else:
+            self.failures += 1
+            print "Success count: %d" % (self.successes,)
+            print "Failure count: %d" % (self.failures,)
+
+            print "Failure rate: ", (float(self.failures) / float(self.successes + self.failures)) * 100

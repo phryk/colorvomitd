@@ -1,6 +1,8 @@
 #!env python
 # -*- coding:utf-8 -*-
 
+#import numba # MORE MAGIC.
+
 import multiprocessing
 import time
 
@@ -290,8 +292,8 @@ class Ravelicht(Irrlicht):
 
     def update(self, amplitudes):
 
-        bass, mids, heights = util.octave_amplitudes(amplitudes, 3)
-        self.smoothed_bass = (self.smoothed_bass * 0.95) + (bass * 0.05)
+        bass, mids, heights = util.octave_amplitudes(amplitudes, 6)[0:3]
+        self.smoothed_bass = (self.smoothed_bass * 0.9) + (bass * 0.1)
         self.color.hue = self.initial_hue + (self.smoothed_bass * 60) - 30
         self.color.value = self.smoothed_bass * 2
         self.step = self.smoothed_bass * 16
@@ -302,8 +304,8 @@ class Ravelicht(Irrlicht):
 class Ravelichter(Visualizer):
 
     basshue = 40
-    midhue = 100
-    trebhue = 260
+    midhue = 300
+    trebhue = 240
 
     basslicht = None
     midlicht = None
@@ -331,24 +333,23 @@ class Ravelichter(Visualizer):
     def update(self, amplitudes):
 
         self.darken(255)
-        bass, mids, heights = util.octave_amplitudes(amplitudes, 3)
-        self.smoothed_bass = (self.smoothed_bass * 0.95) + (bass * 0.05)
+        bass, mids, heights, x, y, z = util.octave_amplitudes(amplitudes, 6)
+        self.smoothed_bass = (self.smoothed_bass * 0.9) + (bass * 0.1)
         self.smoothed_mids = (self.smoothed_mids * 0.9) + (mids * 0.1)
         self.smoothed_heights = (self.smoothed_heights * 0.75) + (heights * 0.25)
 
 
         self.basslicht.color.hue = self.basshue + (self.smoothed_bass * 60) - 30
-        self.basslicht.color.alpha = self.smoothed_bass * 2
-        #self.basslicht.color.value = 0
-        self.basslicht.step = self.smoothed_bass * -16
+        self.basslicht.color.alpha = self.smoothed_bass * 6
+        self.basslicht.step = self.smoothed_bass * -6
 
         self.midlicht.color.hue = self.midhue + (self.smoothed_mids * 60) - 30
-        self.midlicht.color.alpha = self.smoothed_mids * 2
-        self.midlicht.step = self.smoothed_mids * -8
+        self.midlicht.color.alpha = self.smoothed_mids * 3
+        self.midlicht.step = self.smoothed_mids * 3
 
         self.treblicht.color.hue = self.trebhue + (self.smoothed_heights * 60) - 30
-        self.treblicht.color.alpha = self.smoothed_heights * 2
-        self.treblicht.step = self.smoothed_heights * 16
+        self.treblicht.color.alpha = self.smoothed_heights * 3
+        self.treblicht.step = self.smoothed_heights * 3
 
         self.basslicht.update()
         self.midlicht.update()
@@ -360,26 +361,27 @@ class Ravelichter(Visualizer):
 
 
 # temporary config, TODO: move into some sort of config file?
-WITH_EMULATOR = False
-SERIAL_DEVICE = '/dev/cuaU1'
+DEMO_OUTPUT = True
+#SERIAL_DEVICE = '/dev/cuaU0'
+SERIAL_DEVICE = '/dev/ttyUSB0'
 BAUD = 57600
 EMULATOR_WIDTH = 1024
 EMULATOR_HEIGHT = 400
 
+def main():
 
-if __name__ == '__main__':
 
-
-    if WITH_EMULATOR:
-        from emulator import CombinedOutput # importing this without X fails
-        #output = Emulator(width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
-        output = CombinedOutput(SERIAL_DEVICE, BAUD, width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
+    if DEMO_OUTPUT:
+        #from emulator import CombinedOutput # importing this without X fails
+        #output = CombinedOutput(SERIAL_DEVICE, BAUD, width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
+        from emulator import Emulator # importing this without X fails
+        output = Emulator(width=EMULATOR_WIDTH, height=EMULATOR_HEIGHT)
     else:
         output = Serial(SERIAL_DEVICE, BAUD, timeout=1.5)
 
     analyzer_read, analyzer_write = multiprocessing.Pipe(False)
 
-    analyzer = audio.Analyzer(analyzer_write, '/tmp/mpd.fifo', window_size=4096, squelch=False, std=False)
+    analyzer = audio.Analyzer(analyzer_write, '/mnt/a/mpd.fifo', window_size=4096, squelch=False, std=False)
     analyzer.start()
     print "Analyzer started."
 
@@ -430,8 +432,9 @@ if __name__ == '__main__':
 
         if analyzer_read.poll():
             amplitudes = analyzer_read.recv()
-            if WITH_EMULATOR:
-                output.emulator.amplitudes = amplitudes
+            if DEMO_OUTPUT:
+                #output.emulator.amplitudes = amplitudes
+                output.amplitudes = amplitudes
 
             pattern_1.update(amplitudes)
             #pattern_2.update(amplitudes)
@@ -440,3 +443,8 @@ if __name__ == '__main__':
 
             display.update()
             display.render()
+
+
+if __name__ == '__main__':
+
+    main()
